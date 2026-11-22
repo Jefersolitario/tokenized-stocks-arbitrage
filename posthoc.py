@@ -78,6 +78,33 @@ def presample():
                                  weekends_with_trades=sn["clusters_with_trades"], weekends=sn["clusters"], value=sn["mean"], lo=sn["lo"], hi=sn["hi"], p_le_0=sn["p_le_0"],
                                  gross_bps=float(np.mean(gross) * BPS) if take.any() else np.nan, cost_bps=float(np.mean(cost[take]) * BPS) if take.any() else np.nan,
                                  wk_t=sn["wk_t"], wk_p_le_0=sn["wk_p_le_0"], hit=sn["hit"]))
+    # the Monday clock on the 2h grid, single-leg and two-leg, exit 16:00 UTC (the pre-registered extended test had the two-leg form on the earlier weekends only)
+    base = pl.read_parquet(RES / "panel_hl2h.parquet").filter((c("kind") == "weekend") & ~c("split_near"))
+    base = base.with_columns(cl=c("d0").cast(pl.Int32), g=c("P_T1") / c("close0") - 1, m=c("I_T1") / c("ndx_close0") - 1, rs=c("P_X16") / c("P_T1") - 1, ri=c("I_X16") / c("I_T1") - 1)
+    base = base.with_columns(e=c("g") - c("beta") * c("m")).filter((c("g").abs() <= 0.30) & c("rs").is_finite() & c("open1").is_not_null())
+    for lab, f in (("before the 1h sample (not used to find the effect)", ~c("in_1h_sample")), ("inside the 1h sample (cross-check of the 2h definition)", c("in_1h_sample")),
+                   ("all weekends since listing", pl.lit(True))):
+        q0 = base.filter(f)
+        allc = np.unique(q0["cl"].to_numpy())
+        for signal, scol in (("neutral", "e"), ("raw", "g")):
+            need = [scol, "rs"] + (["ri", "beta"] if signal == "neutral" else [])
+            q = q0.filter(pl.all_horizontal([c(k).is_finite() for k in need]))
+            sg, rs, cl = an.arr(q, scol, "rs", "cl"); coins = q["coin"].to_list(); n = q.height
+            hours = ((q["X16"] - q["T1"]) / an.H).to_numpy().astype(float)
+            cost = 2 * an.COSTS.per_side(coins, "primary", "hyperliquid") / BPS
+            R, fund_long = rs.copy(), -med * hours
+            if signal == "neutral":
+                ri, beta = an.arr(q, "ri", "beta")
+                R = rs - beta * ri; fund_long = -med * hours + beta * med * hours
+                cost = cost + 2 * beta * an.COSTS.per_side(["xyz:XYZ100"] * n, "primary", "hyperliquid") / BPS
+            for X in an.X_GRID:
+                take = np.abs(sg) > X
+                dd = -np.sign(sg[take]); gross = dd * R[take]; net = gross + dd * fund_long[take] - cost[take]
+                sn = st.cell_stats(net * BPS, cl[take], allc)
+                rows.append(dict(sample=lab, what="MONDAY CLOCK FADE, entry Mon 08:00 UTC, exit Mon 16:00 UTC: mean net PnL per trade (bps)", signal=signal, X=X,
+                                 trades=sn["trades"], weekends_with_trades=sn["clusters_with_trades"], weekends=sn["clusters"], value=sn["mean"], lo=sn["lo"], hi=sn["hi"], p_le_0=sn["p_le_0"],
+                                 gross_bps=float(np.mean(gross) * BPS) if take.any() else np.nan, cost_bps=float(np.mean(cost[take]) * BPS) if take.any() else np.nan,
+                                 wk_t=sn["wk_t"], wk_p_le_0=sn["wk_p_le_0"], hit=sn["hit"]))
     out = pl.DataFrame(rows, infer_schema_length=None)
     out.write_csv(RES / "posthoc_presample.csv")
     with pl.Config(tbl_rows=120, tbl_cols=30, tbl_width_chars=250, fmt_str_lengths=90, float_precision=2):
