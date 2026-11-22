@@ -149,6 +149,12 @@ def late():
               f"{c.filter(pl.col('days_from_first_candle_to_change') > 2).select('contract', 'first_2h_candle', 'last_fee_scale_change', 'taker_bps_now').rows()}")
         h = rd("posthoc_fee_history.csv")
         print(f"rule cells checked: {h.height}; trades entered before their contract's last fee-scale change, summed over all cells: {int(h['trades_before_last_change'].sum())}")
+    if (RES / "posthoc_by_contract.csv").exists():
+        print("\n== POST-HOC: breadth of the Sunday-evening FADE across contracts (all weekends) ==")
+        b = rd("posthoc_by_contract.csv")
+        print(b.group_by("signal", "X").agg(trades=pl.col("trades").sum(), contracts=pl.len(), contracts_positive=(pl.col("mean_net_bps") > 0).sum(),
+                                            largest_contract_share_of_pnl=pl.col("sum_net_bps").max() / pl.col("sum_net_bps").sum(),
+                                            top10_by_trades_share_of_trades=pl.col("trades").sort(descending=True).head(10).sum() / pl.col("trades").sum()).sort("signal", "X"))
 
 
 def weekend():
@@ -272,7 +278,7 @@ def sample():
                        ("test3_placebo.csv", "placebo rows, pre-registered families"), ("posthoc_execution.csv", "POST-HOC execution variants x halves"), ("posthoc_path.csv", "POST-HOC path slopes"),
                        ("posthoc_presample.csv", "POST-HOC pre-sample replication rows"), ("posthoc_placebo_all_cells.csv", "POST-HOC best-of-all-clocks placebo rows"),
                        ("posthoc_next_trade.csv", "POST-HOC next-trade entry variants x halves"), ("posthoc_next_trade_slopes.csv", "POST-HOC next-trade slopes"),
-                       ("posthoc_fee_history.csv", "POST-HOC fee-history cells x halves")):
+                       ("posthoc_fee_history.csv", "POST-HOC fee-history cells x halves"), ("posthoc_by_contract.csv", "POST-HOC per-contract rows (description)")):
         if (RES / name).exists():
             d = rd(name)
             extra = ""
