@@ -3,7 +3,8 @@ cells that looked profitable (fading the weekend move before external pricing re
 
     python posthoc.py        (after analyze.py)
 
-Writes results/posthoc_execution.csv, posthoc_by_weekend.csv, posthoc_path.csv, posthoc_presample.csv.
+Writes results/posthoc_execution.csv, posthoc_by_weekend.csv, posthoc_path.csv, posthoc_presample.csv and
+posthoc_placebo_all_cells.csv (every weekend clock, form and threshold in one best-of-grid placebo).
 Variants of each FADE cell: entry delayed one hour (signal unchanged), entry-hour volume of at least 100,000 / 10,000
 USD, at least 100 trades in the entry hour, core subset, contracts with / without overnight external pricing, the
 short and the long side separately, harsher cost cases, and the worst and best result after dropping any one weekend.
@@ -24,10 +25,15 @@ def stat(c, X, mask, cls, case="primary", side="fade"):
     s = st.cell_stats(k["net"] * BPS, c["cl"][k["take"]], cls)
     ntl = c["ntl"][k["take"]]
     fin = np.isfinite(ntl)
+    fee = c["cost"]["fee_only"][k["take"]]
     return dict(trades=s["trades"], weekends_with_trades=s["clusters_with_trades"], weekends=s["clusters"],
                 gross_bps=float(np.mean(k["gross"]) * BPS) if len(k["gross"]) else np.nan, funding_bps=float(np.mean(k["fund"]) * BPS) if len(k["fund"]) else np.nan,
-                cost_bps=float(np.mean(k["cost"]) * BPS) if len(k["cost"]) else np.nan, net_bps=s["mean"], net_lo=s["lo"], net_hi=s["hi"], p_net_le_0=s["p_le_0"],
+                cost_bps=float(np.mean(k["cost"]) * BPS) if len(k["cost"]) else np.nan, fee_bps=float(np.mean(fee) * BPS) if len(fee) else np.nan,
+                net_bps=s["mean"], net_lo=s["lo"], net_hi=s["hi"], p_net_le_0=s["p_le_0"],
                 wk_net_bps=s["wk_mean"], wk_t=s["wk_t"], wk_p_le_0=s["wk_p_le_0"], hit=s["hit"],
+                hedge_ratio_median=float(np.median(c["beta"][k["take"]])) if k["take"].any() else np.nan,
+                hedge_ratio_p10=float(np.percentile(c["beta"][k["take"]], 10)) if k["take"].any() else np.nan,
+                hedge_ratio_p90=float(np.percentile(c["beta"][k["take"]], 90)) if k["take"].any() else np.nan,
                 entry_hour_usd_median=float(np.median(ntl[fin])) if fin.any() else np.nan, share_entry_hour_ge_100k=float(np.mean(ntl[fin] >= 1e5)) if fin.any() else np.nan), k
 
 
@@ -131,6 +137,28 @@ def main():
     pl.DataFrame(rows, infer_schema_length=None).write_csv(RES / "posthoc_execution.csv")
     pl.DataFrame(byw).write_csv(RES / "posthoc_by_weekend.csv")
 
+    # Best-of-everything placebo: every weekend clock, form and threshold that was looked at, in one grid.
+    # The same reassignment of weekends is applied to all cells, and each cell is compared with the best cell of each placebo run.
+    allp = []
+    for venue, df in panels.items():
+        k = df.filter(pl.col("kind") == "weekend")
+        hv = an.halves(k)
+        cells = {}
+        for entry in ("T1", "T0"):
+            for signal in ("neutral", "raw"):
+                for exit_ in an.EXITS:
+                    cells[(entry, signal, exit_)] = an.candidates(k, venue, entry, exit_, signal)
+        for signal in ("neutral", "raw"):
+            cells[("Rm", signal, "Rp")] = an.candidates(k, venue, "Rm", "Rp", signal)
+            cells[("Rm+1h (signal at Rm)", signal, "Rp")] = an.candidates(k, venue, "Rmp1", "Rp", signal, sig_time="Rm")
+            cells[("T0+1h (signal at T0)", signal, "Oplus")] = an.candidates(k, venue, "T0p1", "Oplus", signal, sig_time="T0")
+        cells[("T0+1h (signal at T0)", "neutral", "C1")] = an.candidates(k, venue, "T0p1", "C1", "neutral", sig_time="T0")
+        if venue == "hyperliquid":
+            cells[("T1+1h (signal at T1)", "neutral", "Oplus")] = an.candidates(k, venue, "T1p1", "Oplus", "neutral", sig_time="T1")
+            cells[("T1", "neutral, hedge xyz:SP500", "Oplus")] = an.candidates(k, venue, "T1", "Oplus", "neutral", hedge="J")
+        allp.append(an.placebo_family(cells, hv, f"{venue}: every weekend clock, form and threshold"))
+    pl.concat(allp).write_csv(RES / "posthoc_placebo_all_cells.csv")
+
     # where along the weekend the venue's move is given back (description): later move on the cumulative move so far
     path = []
     c = pl.col
@@ -148,6 +176,16 @@ def main():
                 path.append(dict(venue=venue, segment=lab, subset=sub, n=r.get("n"), weekends=r.get("clusters"), slope=r.get("slope"), lo=r.get("lo"), hi=r.get("hi"), r2=r.get("r2")))
                 r = an.slope_row(k.filter(f), f"{venue}: {lab} [{sub}] fe", x, y, fe=True, placebo=False)
                 path.append(dict(venue=venue, segment=lab + " - weekend fixed effects", subset=sub, n=r.get("n"), weekends=r.get("clusters"), slope=r.get("slope"), lo=r.get("lo"), hi=r.get("hi"), r2=r.get("r2")))
+        # the give-back across the reopening and from Sunday 20:00 UTC to Monday 08:00 UTC, in each half of the weekends
+        hv = an.halves(k)
+        for half, lab in (("sel", "earlier half"), ("eval", "later half")):
+            kh = k.filter(c("cl").is_in(hv[half].tolist()))
+            for seglab, x, y in (("Sun 19:00 ET -> 22:00 ET (across the reopening)", "v_Rm", "venue_reopen"), ("Sun 20:00 UTC -> Mon 08:00 UTC", "v_T0", "venue_T0_T1"),
+                                 ("official gap on v(T0)", "v_T0", "gap"), ("official gap on v(R-)", "v_Rm", "gap")):
+                for fe in (False, True):
+                    r = an.slope_row(kh, "x", x, y, fe=fe, placebo=False)
+                    path.append(dict(venue=venue, segment=seglab + (" - weekend fixed effects" if fe else ""), subset=lab, n=r.get("n"), weekends=r.get("clusters"), slope=r.get("slope"),
+                                     lo=r.get("lo"), hi=r.get("hi"), r2=r.get("r2")))
         # do stock contracts lag the index contract at R-?  slope of the stock's spread on beta x index move (1 = no lag)
         r = an.slope_row(k, f"{venue}: g(R-) on beta x m(R-)", "bm_Rm", "g_Rm", placebo=False)
         path.append(dict(venue=venue, segment="spread g(R-) on beta x index-contract move m(R-) [1 = stocks have followed the index]", subset="all", n=r.get("n"), weekends=r.get("clusters"),

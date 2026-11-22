@@ -5,8 +5,8 @@
 Writes results/spreads.csv: per contract, the quoted half-spread and the cost against the mid of a market order of
 1,000 / 10,000 / 50,000 USD (average of buy and sell), median over the snapshots; visible depth; the half-spread the
 tests use (1,000 USD order, floor 1 bp) with the 10,000 USD figure as a reference; and the taker and
-maker fee implied by the venue metadata (Hyperliquid HIP-3: tier-0 base 4.5 / 1.5 bps x 2 for deployer fee scale 1.0,
-x 0.1 when growth mode is enabled; Binance spot: 10 bps assumed, not verified).
+maker fee implied by the venue metadata and the venue's documented fee formula (Hyperliquid HIP-3: tier-0 base
+4.5 / 1.5 bps x 2 for deployer fee scale 1.0, x 0.1 when growth mode is enabled; Binance spot: 10 bps assumed, not verified).
 """
 import datetime as dt
 import json
@@ -68,9 +68,12 @@ def main():
     agg = raw.group_by("venue", "contract").agg(snapshots=pl.len(), first_snapshot_utc=pl.col("snapshot_utc").min(), last_snapshot_utc=pl.col("snapshot_utc").max(),
                                                 **{c: pl.col(c).median() for c in raw.columns if c.endswith("_bps") or c.endswith("_usd")})
     meta = json.loads((DATA / "hl_meta_xyz.json").read_text())["meta"]["universe"]
-    fee = {u["name"]: (4.5 * 2 * float(u.get("deployerFeeScale", "1.0")) * (0.1 if u.get("growthMode") == "enabled" else 1.0),
-                       1.5 * 2 * float(u.get("deployerFeeScale", "1.0")) * (0.1 if u.get("growthMode") == "enabled" else 1.0),
-                       u.get("growthMode") == "enabled", bool(u.get("isDelisted")), u.get("maxLeverage")) for u in meta}
+    def scale(u):
+        # Hyperliquid fee documentation: scaleIfHip3 = deployerFeeScale < 1 ? deployerFeeScale + 1 : deployerFeeScale * 2; growthModeScale = growthMode ? 0.1 : 1
+        d = float(u.get("deployerFeeScale", "1.0"))
+        return (d + 1 if d < 1 else d * 2) * (0.1 if u.get("growthMode") == "enabled" else 1.0)
+    # tier-0 base perp rates: taker 0.045% = 4.5 bps, maker 0.015% = 1.5 bps
+    fee = {u["name"]: (4.5 * scale(u), 1.5 * scale(u), u.get("growthMode") == "enabled", bool(u.get("isDelisted")), u.get("maxLeverage")) for u in meta}
     agg = agg.with_columns(
         taker_bps=pl.when(pl.col("venue") == "binance").then(10.0).otherwise(pl.col("contract").map_elements(lambda c: fee.get(c, (9.0,))[0], return_dtype=pl.Float64)),
         maker_bps=pl.when(pl.col("venue") == "binance").then(10.0).otherwise(pl.col("contract").map_elements(lambda c: fee.get(c, (9.0, 3.0))[1], return_dtype=pl.Float64)))

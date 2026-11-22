@@ -101,11 +101,12 @@ class Costs:
         else:
             tk = np.array([self.taker.get(k, 9.0) for k in coins], float); mk = np.array([self.maker.get(k, 3.0) for k in coins], float)
             f45 = np.full(n, 4.5); f9 = np.full(n, 9.0)
-        return {"primary": tk + hs, "ref_10k": tk + hs10k, "fee4.5": f45 + hs, "fee9": f9 + hs, "hs2": tk + 2.0, "hs10": tk + 10.0, "maker": mk + 0.0, "fee4.5_hs10": f45 + 10.0}[case]
+        return {"primary": tk + hs, "fee_only": tk + 0.0, "ref_10k": tk + hs10k, "fee4.5": f45 + hs, "fee9": f9 + hs, "hs2": tk + 2.0, "hs10": tk + 10.0, "maker": mk + 0.0,
+                "fee4.5_hs10": f45 + 10.0}[case]
 
 
 COSTS = None
-CASES = ["primary", "ref_10k", "fee4.5", "fee9", "hs2", "hs10", "maker", "fee4.5_hs10"]
+CASES = ["primary", "fee_only", "ref_10k", "fee4.5", "fee9", "hs2", "hs10", "maker", "fee4.5_hs10"]   # fee_only: taker fees with no spread, to split the cost
 
 
 def candidates(df, venue, entry, exit_, signal, hedge="I", sig_time=None):
@@ -122,6 +123,7 @@ def candidates(df, venue, entry, exit_, signal, hedge="I", sig_time=None):
     fund_missing = ~np.isfinite(fs); fs = np.where(fund_missing, 0.0, fs)
     R, fund_long = rs.copy(), -fs
     cost = {k: 2 * COSTS.per_side(coins, k, venue) / BPS for k in CASES}
+    beta = np.zeros(n)                                    # hedge ratio per trade (0 = no hedge leg)
     if neutral:
         rh, beta = arr(d, f"{hp}_{entry}_{exit_}", "beta")
         fh = d[f"{hf}_{entry}_{exit_}"].to_numpy().astype(float); fh = np.where(np.isfinite(fh), fh, 0.0)
@@ -130,7 +132,7 @@ def candidates(df, venue, entry, exit_, signal, hedge="I", sig_time=None):
             cost[k] = cost[k] + 2 * beta * COSTS.per_side([hcoin] * n, k, "hyperliquid") / BPS
     ntl = d[f"P_{entry}_ntl"].to_numpy().astype(float) if f"P_{entry}_ntl" in d.columns else np.full(n, np.nan)
     ntr = d[f"P_{entry}_n"].to_numpy().astype(float) if f"P_{entry}_n" in d.columns else np.full(n, np.nan)
-    return dict(s=s, R=R, fund_long=fund_long, cost=cost, cl=d["cl"].to_numpy(), coin=np.array(coins), ntl=ntl, ntrades=ntr, fund_missing=fund_missing,
+    return dict(s=s, R=R, fund_long=fund_long, cost=cost, cl=d["cl"].to_numpy(), coin=np.array(coins), ntl=ntl, ntrades=ntr, fund_missing=fund_missing, beta=beta,
                 d0=d["d0"].to_numpy(), rth_only=d["rth_only"].to_numpy(), core=d["core"].to_numpy())
 
 
@@ -158,6 +160,7 @@ def grid_rows(c, clusters_by_half, tags, long_only=False):
                 rows.append(dict(**tags, X=X, side=side, half=half, long_only=long_only, trades=s_net["trades"], clusters_with_trades=s_net["clusters_with_trades"],
                                  clusters=s_net["clusters"], gross_bps=s_gross["mean"], gross_lo=s_gross["lo"], gross_hi=s_gross["hi"], t_cluster_gross=s_gross["t_cluster"],
                                  funding_bps=float(np.mean(k["fund"]) * BPS) if len(k["fund"]) else np.nan, cost_bps=float(np.mean(k["cost"]) * BPS) if len(k["cost"]) else np.nan,
+                                 fee_bps=float(np.mean(c["cost"]["fee_only"][k["take"]]) * BPS) if len(k["cost"]) else np.nan,
                                  net_bps=s_net["mean"], net_lo=s_net["lo"], net_hi=s_net["hi"], p_net_le_0=s_net["p_le_0"], median_net_bps=s_net["median"], hit=s_net["hit"],
                                  wk_net_bps=s_net["wk_mean"], wk_lo=s_net["wk_lo"], wk_hi=s_net["wk_hi"], wk_t=s_net["wk_t"], wk_p_le_0=s_net["wk_p_le_0"],
                                  entry_hour_usd_median=float(np.nanmedian(ntl)) if len(ntl) and np.isfinite(ntl).any() else np.nan,
@@ -242,8 +245,17 @@ def placebo_family(cands, hv, family, n_perm=st.N_PERM):
         maxabs = np.nanmax(np.abs(M), axis=1)
         rv = np.array([real[k] for k in keys])
         best = int(np.nanargmax(np.abs(rv))) if np.isfinite(rv).any() else 0
+        # shifted weekends: every circular shift of the signal rows by 1 .. N-1 closures, same statistic
+        shifts = [tstats(np.roll(np.arange(len(cls)), s)) for s in range(1, len(cls))]
+        Ms = np.array([[p[k] for k in keys] for p in shifts]) if shifts else np.zeros((0, len(keys)))
+        shift_max = np.nanmax(np.abs(Ms), axis=1) if len(Ms) else np.array([])
         for j, k in enumerate(keys):
-            out.append(dict(family=family, scope=scope, entry=k[0], signal=k[1], exit=k[2], X=k[3], t_fade_real=rv[j],
+            out.append(dict(family=family, scope=scope, entry=k[0], signal=k[1], exit=k[2], X=k[3], t_fade_real=rv[j], cells_in_grid=len(keys),
+                            placebo_p_vs_best_of_grid=float(np.mean(maxabs >= abs(rv[j]))) if np.isfinite(rv[j]) else np.nan,
+                            placebo_best_abs_t_p99=float(np.nanpercentile(maxabs, 99)),
+                            shifts=int(len(shift_max)), shift_best_abs_t_max=float(shift_max.max()) if len(shift_max) else np.nan,
+                            shift_best_abs_t_p95=float(np.percentile(shift_max, 95)) if len(shift_max) else np.nan,
+                            shift_p_vs_best_of_grid=float((1 + np.sum(shift_max >= abs(rv[j]))) / (1 + len(shift_max))) if np.isfinite(rv[j]) and len(shift_max) else np.nan,
                             placebo_p_fade=float(np.nanmean(M[:, j] >= rv[j])) if np.isfinite(rv[j]) else np.nan,
                             placebo_p_follow=float(np.nanmean(M[:, j] <= rv[j])) if np.isfinite(rv[j]) else np.nan,
                             placebo_t_p2_5=float(np.nanpercentile(M[:, j], 2.5)) if np.isfinite(M[:, j]).any() else np.nan,
