@@ -18,7 +18,7 @@ from common import CORE, DATA, H, NY, RES, RTH_ONLY, SEED, load_official
 
 X_GRID = (0.01, 0.02, 0.03)
 ENTRIES, EXITS = ["T0", "T1", "T0p1", "T1p1"], ["Oplus", "C1"]
-WINDOWS = [(e, x) for e in ENTRIES for x in EXITS] + [("Rm", "Rp")]
+WINDOWS = [(e, x) for e in ENTRIES for x in EXITS] + [("Rm", "Rp"), ("Rmp1", "Rp")]
 GRID = lambda entries: [(e, sg, x) for e in entries for sg in ("neutral", "raw") for x in EXITS]
 REOPEN = [("Rm", "neutral", "Rp"), ("Rm", "raw", "Rp")]
 BPS = 1e4
@@ -129,8 +129,9 @@ def candidates(df, venue, entry, exit_, signal, hedge="I", sig_time=None):
         for k in CASES:
             cost[k] = cost[k] + 2 * beta * COSTS.per_side([hcoin] * n, k, "hyperliquid") / BPS
     ntl = d[f"P_{entry}_ntl"].to_numpy().astype(float) if f"P_{entry}_ntl" in d.columns else np.full(n, np.nan)
-    return dict(s=s, R=R, fund_long=fund_long, cost=cost, cl=d["cl"].to_numpy(), coin=np.array(coins), ntl=ntl, fund_missing=fund_missing,
-                d0=d["d0"].to_numpy(), long_only_ok=np.ones(n, bool))
+    ntr = d[f"P_{entry}_n"].to_numpy().astype(float) if f"P_{entry}_n" in d.columns else np.full(n, np.nan)
+    return dict(s=s, R=R, fund_long=fund_long, cost=cost, cl=d["cl"].to_numpy(), coin=np.array(coins), ntl=ntl, ntrades=ntr, fund_missing=fund_missing,
+                d0=d["d0"].to_numpy(), rth_only=d["rth_only"].to_numpy(), core=d["core"].to_numpy())
 
 
 def cell(c, X, side, mask=None, case="primary", clusters=None):

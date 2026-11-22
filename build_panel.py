@@ -13,7 +13,7 @@ import polars as pl
 from common import DATA, H, INDEX, RES, Funding, add_px, load_official, load_splits, price_table, rolling_beta, session_pairs
 
 ENTRIES, EXITS = ["T0", "T1", "T0p1", "T1p1"], ["Oplus", "C1"]
-WINDOWS = [(e, x) for e in ENTRIES for x in EXITS] + [("Rm", "Rp")]       # (entry, exit) pairs that need a funding sum
+WINDOWS = [(e, x) for e in ENTRIES for x in EXITS] + [("Rm", "Rp"), ("Rmp1", "Rp")]       # (entry, exit) pairs that need a funding sum
 
 
 def with_official(obs, off, spl):
@@ -55,7 +55,7 @@ def main():
     pt, pt2 = price_table(c1, "coin", H), price_table(c2, "coin", 2 * H)
     t_first = c1["t"].min()
     pairs1 = pairs.filter(pl.col("F") >= t_first + H)                      # closures the 1h candles can cover
-    times = ["F", "T0", "T1", "T0p1", "T1p1", "Oplus", "C1", "Rm", "Rp"]
+    times = ["F", "T0", "T1", "T0p1", "T1p1", "Oplus", "C1", "Rm", "Rmp1", "Rp"]
 
     def index_legs(obs, table, cols):
         for pref, coin in (("I", "xyz:XYZ100"), ("J", "xyz:SP500")):
@@ -69,7 +69,7 @@ def main():
     obs = pairs1.join(pl.DataFrame({"coin": coins}), how="cross").with_columns(ticker=pl.col("coin").str.replace("xyz:", "", literal=True))
     obs = with_official(obs, off, spl)
     for tcol in times:
-        obs = add_px(obs, pt, tcol, f"P_{tcol}", extra=tcol in ("T0", "T1", "T0p1", "T1p1", "F", "Rm"))
+        obs = add_px(obs, pt, tcol, f"P_{tcol}", extra=tcol in ("T0", "T1", "T0p1", "T1p1", "F", "Rm", "Rmp1"))
     obs = obs.join(c30.select("coin", pl.col("t").alias("O"), pl.col("o").cast(pl.Float64).alias("P_open30")), on=["coin", "O"], how="left")
     obs = obs.join(c30.select("coin", (pl.col("t") + H // 2).alias("O"), pl.col("c").cast(pl.Float64).alias("P_preopen30")), on=["coin", "O"], how="left")
     obs = index_legs(obs, pt, times)
@@ -84,9 +84,9 @@ def main():
     pairs2 = pairs.filter(pl.col("F") >= c2["t"].min() + 2 * H)
     o2 = pairs2.join(pl.DataFrame({"coin": coins2}), how="cross").with_columns(ticker=pl.col("coin").str.replace("xyz:", "", literal=True))
     o2 = with_official(o2, off, spl)
-    t2 = ["F", "T0", "T1", "X16", "C1"]
+    t2 = ["F", "T0", "T1", "X16", "C1", "Z0", "Z4"]
     for tcol in t2:
-        o2 = add_px(o2, pt2, tcol, f"P_{tcol}", extra=tcol in ("T0", "T1"))
+        o2 = add_px(o2, pt2, tcol, f"P_{tcol}", extra=tcol in ("T0", "T1", "Z0"))
     o2 = index_legs(o2, pt2, t2)
     ndx = off.filter(pl.col("ticker") == "^NDX").select(pl.col("date").alias("d0"), pl.col("close").alias("ndx_close0"))
     o2 = o2.join(ndx, on="d0", how="left").join(betas, on=["ticker", "d0"], how="left")
@@ -125,7 +125,7 @@ def main():
     ob = pairsb.join(pl.DataFrame({"coin": syms, "ticker": [tick[s] for s in syms]}), how="cross")
     ob = with_official(ob, off, spl)
     for tcol in times:
-        ob = add_px(ob, ptb, tcol, f"P_{tcol}", extra=tcol in ("T0", "T1", "T0p1", "T1p1", "F", "Rm"))
+        ob = add_px(ob, ptb, tcol, f"P_{tcol}", extra=tcol in ("T0", "T1", "T0p1", "T1p1", "F", "Rm", "Rmp1"))
         ob = add_px(ob, usdc, tcol, f"U_{tcol}", by_coin=False)
     ob = ob.join(k30.select(pl.col("symbol").alias("coin"), pl.col("t").alias("O"), pl.col("o").alias("P_open30")), on=["coin", "O"], how="left")
     ob = ob.join(k30.select(pl.col("symbol").alias("coin"), (pl.col("t") + H // 2).alias("O"), pl.col("c").alias("P_preopen30")), on=["coin", "O"], how="left")

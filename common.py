@@ -52,7 +52,8 @@ def session_pairs(off):
         o, t1, t0 = open_ms(d1), ms(d1, 8), ms(prev, 20)
         rows.append(dict(d0=d0, d1=d1, kind=kind, gap_days=(d1 - d0).days, F=close_ms(d0), O=o, Oplus=o + H // 2, C1=close_ms(d1),
                          T1=t1, T1p1=t1 + H, T0=t0, T0p1=t0 + H, X16=ms(d1, 16),
-                         Rm=ms(prev, 19, 0, NY), Rp=ms(prev, 22, 0, NY)))      # one hour before / two hours after external pricing resumes
+                         Rm=ms(prev, 19, 0, NY), Rmp1=ms(prev, 20, 0, NY), Rp=ms(prev, 22, 0, NY),    # one hour before / at / two hours after external pricing resumes
+                         Z0=ms(d1, 0), Z4=ms(d1, 4)))      # 00:00 and 04:00 UTC on d1: the same reopening window on the 2h candle grid (post-hoc replication)
     return pl.DataFrame(rows)
 
 
