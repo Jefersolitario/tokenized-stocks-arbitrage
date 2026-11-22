@@ -1,0 +1,21 @@
+{
+ "bn_requests": 0,
+ "config": {
+  "binance_start": "2026-05-01",
+  "funding_hours_back": 5200,
+  "hl_weight_per_minute": 900,
+  "mode": "smoke",
+  "note": "smoke = 3 contracts and 2 tokens to check formats; full = whole universe"
+ },
+ "errors": [],
+ "finished_utc": "2026-11-22T11:25:40Z",
+ "funding_rows": {
+  "xyz:NVDA": 720,
+  "xyz:SP500": 720,
+  "xyz:XYZ100": 720
+ },
+ "hl_requests": 10,
+ "hl_weight": 254,
+ "refused": [],
+ "started_utc": "2026-11-22T11:25:21Z"
+}
