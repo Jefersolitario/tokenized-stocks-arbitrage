@@ -132,3 +132,49 @@ Tests 1 to 3 with nights instead of weekends, entry time T1 only (08:00 UTC on d
 - No historical order books: spreads come from one weekend snapshot; hourly candle closes are last trades, not mids.
 - Hyperliquid serves about 5,000 candles per interval, so the hourly sample is about 7 months (about 29 weekends).
 - Contracts delisted before today may be missing from the venue's list (survivorship cannot be fully checked).
+
+## Addendum 1 - the owner's hypothesis H1 (added 22 Nov 2026, about 11:40 UTC)
+
+Received from the coordinator while the full download was still running. At that moment the only venue data on
+disk was the smoke run (xyz:NVDA, xyz:SP500, xyz:XYZ100, NVDAB, SPYB); it had been used for format checks and for
+the clock audit (venue price against the official open and close at the session times). No slope, no reversal and
+no PnL had been computed on any data.
+
+H1 (owner, verbatim): "the price of tokenized stocks will converge to the Monday opening", i.e. the token gives
+back part of its weekend move, rather than the stock opening where the token already was.
+
+H1 is the hypothesis on trial. It is H_revert above; the alternative is H_info.
+
+- Statistic: the Test 1 primary slope b (pooled OLS, official gap on the venue's own move v(T1), all contracts,
+  weekends of the 1h sample), with its 95% percentile interval from the weekend-level bootstrap (10,000 resamples,
+  seed 20261122).
+- Verdict on H1, three-way:
+  - SUPPORTED if the whole 95% interval is below 1.
+  - REJECTED in favour of the alternative if the interval contains 1 or lies above it.
+  - The size is reported separately from the significance: share of the weekend move given back = 1 - b, with the
+    interval (1 - upper, 1 - lower). A slope whose interval is below 1 but which is 0.9 or more is reported as
+    "H1 supported in sign, economically small"; whether it is worth trading is decided only by the fade rule.
+- The same statistic is reported, as already pre-specified, for T0 (inside the internal weekend session), for the
+  spread g instead of v, with weekend fixed effects, for the core subset, for the index contracts, for Binance and
+  for the extended 2h sample. The verdict is read from the primary; the others say how far it generalises.
+- Second, direct estimate of the give-back (variant (g) above): slope of the venue's own later move,
+  P(O+)/P(T1) - 1, on v(T1). Give-back share = minus that slope. Needs no official price.
+- Tradeable form: Monday's open is not known in advance, so H1 can only be traded as the FADE rule of Test 3.
+  The report puts side by side: the H1 slope with its interval, the give-back share, and the net PnL per trade of
+  the FADE rule (primary configuration: entry T1, market-neutral, exit O+; threshold chosen on the earlier half,
+  evaluated once on the later half), plus the FADE cells at fixed X = 1%, 2%, 3% in both halves.
+- H1 is called TRADEABLE only if the Test 3 verdict rule above is met (later-half interval above zero and beyond
+  the 95th percentile of the placebo best-of-grid).
+
+## Clarifications fixed before the full data arrived (no outcome seen)
+
+- beta_i falls back to 1.0 when fewer than 30 daily returns exist in the 60-session window.
+- Exact-open price for B_open: the open of the 30-minute candle that starts at the cash open (first trade at or
+  after 09:30:00 New York). Also reported, as description only: the close of the 30-minute candle ending at the
+  open (last trade before the open).
+- Hyperliquid contracts delisted by the venue (ACN, SNAP, NU, MELI, STX, SNOW, SMCI) are included while they traded.
+- Binance tokens: all spot symbols in the same exchange permission group as NVDABUSDT with quote USDT and a base
+  asset ending in "B" (111 symbols on 22 Nov 2026), not only the 16 named in the brief.
+- Fee facts found before the tests: xyz contracts have deployerFeeScale 1.0 and, for 133 of 147, growthMode
+  enabled in the API metadata, which with the venue's fee formula gives a tier-0 taker fee of 0.9 bps (maker 0.3
+  bps); 9 bps (maker 3 bps) where growth mode is off. That is the primary fee case per the rule above.
