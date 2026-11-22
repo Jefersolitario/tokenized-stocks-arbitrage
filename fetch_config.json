@@ -1,0 +1,7 @@
+{
+ "mode": "smoke",
+ "hl_weight_per_minute": 900,
+ "binance_start": "2026-05-01",
+ "funding_hours_back": 5200,
+ "note": "smoke = 3 contracts and 2 tokens to check formats; full = whole universe"
+}
