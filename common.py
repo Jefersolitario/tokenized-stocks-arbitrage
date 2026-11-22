@@ -1,12 +1,15 @@
 """Shared definitions for the weekend-basis study: session clock, loaders, price lookups."""
-import datetime as dt, gzip, json, pathlib
+import datetime as dt, gzip, json, os, pathlib
 from zoneinfo import ZoneInfo
 
 import numpy as np
 import polars as pl
 
 HERE = pathlib.Path(__file__).resolve().parent
-DATA, OFF, RES = HERE / "data", HERE / "official", HERE / "results"
+# WB_DATA / WB_RES redirect the venue data and the outputs (used only by the synthetic known-answer test)
+DATA = pathlib.Path(os.environ.get("WB_DATA", HERE / "data"))
+OFF = HERE / "official"
+RES = pathlib.Path(os.environ.get("WB_RES", HERE / "results"))
 NY, UTC = ZoneInfo("America/New_York"), dt.timezone.utc
 H = 3_600_000
 SEED = 20261122
@@ -45,9 +48,11 @@ def session_pairs(off):
         between = [d0 + dt.timedelta(days=k) for k in range(1, (d1 - d0).days)]
         wk = any(x.weekday() == 5 for x in between) and any(x.weekday() == 6 for x in between)
         kind = "weekend" if wk else ("night" if (d1 - d0).days == 1 else "other")
-        o, t1, t0 = open_ms(d1), ms(d1, 8), ms(d1 - dt.timedelta(days=1), 20)
+        prev = d1 - dt.timedelta(days=1)
+        o, t1, t0 = open_ms(d1), ms(d1, 8), ms(prev, 20)
         rows.append(dict(d0=d0, d1=d1, kind=kind, gap_days=(d1 - d0).days, F=close_ms(d0), O=o, Oplus=o + H // 2, C1=close_ms(d1),
-                         T1=t1, T1p1=t1 + H, T0=t0, T0p1=t0 + H, X16=ms(d1, 16)))
+                         T1=t1, T1p1=t1 + H, T0=t0, T0p1=t0 + H, X16=ms(d1, 16),
+                         Rm=ms(prev, 19, 0, NY), Rp=ms(prev, 22, 0, NY)))      # one hour before / two hours after external pricing resumes
     return pl.DataFrame(rows)
 
 
