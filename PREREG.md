@@ -178,3 +178,23 @@ H1 is the hypothesis on trial. It is H_revert above; the alternative is H_info.
 - Fee facts found before the tests: xyz contracts have deployerFeeScale 1.0 and, for 133 of 147, growthMode
   enabled in the API metadata, which with the venue's fee formula gives a tier-0 taker fee of 0.9 bps (maker 0.3
   bps); 9 bps (maker 3 bps) where growth mode is off. That is the primary fee case per the rule above.
+
+## Addendum 2 - the Sunday-night reopening (added 22 Nov 2026, about 11:50 UTC, before the full data arrived)
+
+Reason: the venue documentation says most xyz stock contracts are priced from an external market from Sunday 20:05
+New York time (overnight session), and from the order book alone between Friday 20:00 and Sunday 20:05. The one
+published study of the venue (Blockworks Research, sponsored) measures the give-back at that reopening, not at
+Monday's cash open. If H1 is true, the documentation suggests it should show there first. The tests above already
+span that moment (entry T0, exit O+) but do not isolate it. No outcome had been computed when this was added.
+
+- Two more clock times: R- = 19:00 New York time on the calendar day before d1 (one hour before the internal
+  session ends); R+ = 22:00 New York time on the same day (about two hours after external pricing resumes).
+- Test 1 additions: slope of the venue's own move across the reopening, P(R+)/P(R-) - 1, on v(R-) (give-back at
+  the reopening = minus the slope); official gap on v(R-) and on v(R+).
+- Test 3 addition, its own family ("reopening"): entry R-, exit R+, signals g(R-) and e(R-), X in 1%, 2%, 3%,
+  FADE and FOLLOW, same costs, funding over (R-, R+], selection on the earlier half and one evaluation on the later
+  half, same placebos. Benjamini-Hochberg is reported within this family (2 configurations) and across the 10
+  weekend configurations together.
+- Descriptive only (no test): for weekends with |v(T1)| above 1% and above 2%, the median of gap / v(T1)
+  ("share of the venue's move that the cash open confirmed") and the shares of observations with a ratio below 0,
+  between 0 and 1, and above 1.
