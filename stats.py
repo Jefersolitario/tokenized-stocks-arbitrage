@@ -3,6 +3,7 @@
 One cluster = one closure (one weekend or one night). Every random draw uses the fixed seed in common.SEED.
 """
 import numpy as np
+from scipy.stats import t as tdist
 
 from common import SEED
 
@@ -102,15 +103,24 @@ def cell_stats(pnl, cl, all_clusters, B=B_BOOT, seed=SEED):
     S = np.bincount(pos, weights=pnl, minlength=len(allc)); n = np.bincount(pos, minlength=len(allc)).astype(float)
     out = dict(trades=int(len(pnl)), clusters_with_trades=int((n > 0).sum()), clusters=int(len(allc)))
     if len(pnl) == 0:
-        return dict(out, mean=np.nan, lo=np.nan, hi=np.nan, p_le_0=np.nan, median=np.nan, hit=np.nan, t_cluster=np.nan)
+        return dict(out, mean=np.nan, lo=np.nan, hi=np.nan, p_le_0=np.nan, median=np.nan, hit=np.nan, t_cluster=np.nan,
+                    wk_mean=np.nan, wk_lo=np.nan, wk_hi=np.nan, wk_t=np.nan, wk_p_le_0=np.nan)
     rng = np.random.default_rng(seed)
     idx = rng.integers(0, len(allc), size=(B, len(allc)))
     with np.errstate(divide="ignore", invalid="ignore"):
         mb = S[idx].sum(axis=1) / n[idx].sum(axis=1)
     lo, hi = np.nanpercentile(mb, [2.5, 97.5])
     t = S.sum() / np.sqrt((S ** 2).sum()) if (S ** 2).sum() > 0 else np.nan
+    # second, more conservative view with few clusters: one number per cluster (its mean PnL per trade), Student t across clusters
+    mw = S[n > 0] / n[n > 0]; k = len(mw)
+    if k >= 3 and np.std(mw, ddof=1) > 0:
+        wt = mw.mean() / (np.std(mw, ddof=1) / np.sqrt(k)); wp = float(tdist.sf(wt, k - 1))
+        half = tdist.ppf(0.975, k - 1) * np.std(mw, ddof=1) / np.sqrt(k)
+        wk = dict(wk_mean=float(mw.mean()), wk_lo=float(mw.mean() - half), wk_hi=float(mw.mean() + half), wk_t=float(wt), wk_p_le_0=wp)
+    else:
+        wk = dict(wk_mean=float(mw.mean()) if k else np.nan, wk_lo=np.nan, wk_hi=np.nan, wk_t=np.nan, wk_p_le_0=np.nan)
     return dict(out, mean=float(pnl.mean()), lo=float(lo), hi=float(hi), p_le_0=float(np.nanmean(mb <= 0)), median=float(np.median(pnl)),
-                hit=float((pnl > 0).mean()), t_cluster=float(t))
+                hit=float((pnl > 0).mean()), t_cluster=float(t), **wk)
 
 
 def cluster_t(P):

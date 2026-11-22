@@ -87,24 +87,25 @@ def per_contract(df, xcol, min_obs=10):
 class Costs:
     def __init__(self):
         sp = pl.read_csv(RES / "spreads.csv"); fees = pl.read_csv(RES / "hl_fees.csv")
-        self.hs = {r["contract"]: r["half_spread_bps"] for r in sp.iter_rows(named=True)}
+        self.hs = {r["contract"]: r["half_spread_bps"] for r in sp.iter_rows(named=True)}            # 1,000 USD order (primary)
+        self.hs10k = {r["contract"]: r["half_spread_10k_bps"] for r in sp.iter_rows(named=True)}     # 10,000 USD order (reference line)
         self.taker = {r["contract"]: r["taker_bps"] for r in fees.iter_rows(named=True)}
         self.maker = {r["contract"]: r["maker_bps"] for r in fees.iter_rows(named=True)}
 
     def per_side(self, coins, case, venue):
         """bps per side for each coin under a cost case (fee + half-spread; the maker case pays the maker fee and no spread)."""
         n = len(coins)
-        hs = np.array([self.hs.get(k, 5.0) for k in coins], float)
+        hs = np.array([self.hs.get(k, 5.0) for k in coins], float); hs10k = np.array([self.hs10k.get(k, 5.0) for k in coins], float)
         if venue == "binance":                       # spot: 10 bps taker and maker assumed (not verified for these pairs)
             tk = np.full(n, 10.0); mk = np.full(n, 10.0); f45 = tk; f9 = tk
         else:
             tk = np.array([self.taker.get(k, 9.0) for k in coins], float); mk = np.array([self.maker.get(k, 3.0) for k in coins], float)
             f45 = np.full(n, 4.5); f9 = np.full(n, 9.0)
-        return {"primary": tk + hs, "fee4.5": f45 + hs, "fee9": f9 + hs, "hs2": tk + 2.0, "hs10": tk + 10.0, "maker": mk + 0.0, "fee4.5_hs10": f45 + 10.0}[case]
+        return {"primary": tk + hs, "ref_10k": tk + hs10k, "fee4.5": f45 + hs, "fee9": f9 + hs, "hs2": tk + 2.0, "hs10": tk + 10.0, "maker": mk + 0.0, "fee4.5_hs10": f45 + 10.0}[case]
 
 
 COSTS = None
-CASES = ["primary", "fee4.5", "fee9", "hs2", "hs10", "maker", "fee4.5_hs10"]
+CASES = ["primary", "ref_10k", "fee4.5", "fee9", "hs2", "hs10", "maker", "fee4.5_hs10"]
 
 
 def candidates(df, venue, entry, exit_, signal, hedge="I", sig_time=None):
@@ -157,8 +158,11 @@ def grid_rows(c, clusters_by_half, tags, long_only=False):
                                  clusters=s_net["clusters"], gross_bps=s_gross["mean"], gross_lo=s_gross["lo"], gross_hi=s_gross["hi"], t_cluster_gross=s_gross["t_cluster"],
                                  funding_bps=float(np.mean(k["fund"]) * BPS) if len(k["fund"]) else np.nan, cost_bps=float(np.mean(k["cost"]) * BPS) if len(k["cost"]) else np.nan,
                                  net_bps=s_net["mean"], net_lo=s_net["lo"], net_hi=s_net["hi"], p_net_le_0=s_net["p_le_0"], median_net_bps=s_net["median"], hit=s_net["hit"],
+                                 wk_net_bps=s_net["wk_mean"], wk_lo=s_net["wk_lo"], wk_hi=s_net["wk_hi"], wk_t=s_net["wk_t"], wk_p_le_0=s_net["wk_p_le_0"],
                                  entry_hour_usd_median=float(np.nanmedian(ntl)) if len(ntl) and np.isfinite(ntl).any() else np.nan,
                                  entry_hour_usd_p10=float(np.nanpercentile(ntl, 10)) if len(ntl) and np.isfinite(ntl).any() else np.nan,
+                                 entry_hour_usd_min=float(np.nanmin(ntl)) if len(ntl) and np.isfinite(ntl).any() else np.nan,
+                                 share_entry_hour_ge_100k=float(np.mean(ntl >= 1e5)) if len(ntl) else np.nan, share_entry_hour_ge_10k=float(np.mean(ntl >= 1e4)) if len(ntl) else np.nan,
                                  funding_missing=int(c["fund_missing"][k["take"]].sum())))
     return rows
 
@@ -187,7 +191,9 @@ def run_family(df, venue, kind, configs, family, long_only=False):
                              eval_trades=ev["trades"], eval_clusters_with_trades=ev["clusters_with_trades"], eval_clusters=ev["clusters"],
                              eval_gross_bps=ev["gross_bps"], eval_funding_bps=ev["funding_bps"], eval_cost_bps=ev["cost_bps"],
                              eval_net_bps=ev["net_bps"], eval_lo=ev["net_lo"], eval_hi=ev["net_hi"], eval_p_net_le_0=ev["p_net_le_0"], eval_hit=ev["hit"],
-                             eval_entry_hour_usd_median=ev["entry_hour_usd_median"], eval_entry_hour_usd_p10=ev["entry_hour_usd_p10"]))
+                             eval_wk_net_bps=ev["wk_net_bps"], eval_wk_lo=ev["wk_lo"], eval_wk_hi=ev["wk_hi"], eval_wk_t=ev["wk_t"], eval_wk_p_le_0=ev["wk_p_le_0"],
+                             eval_entry_hour_usd_median=ev["entry_hour_usd_median"], eval_entry_hour_usd_p10=ev["entry_hour_usd_p10"], eval_entry_hour_usd_min=ev["entry_hour_usd_min"],
+                             eval_share_entry_hour_ge_100k=ev["share_entry_hour_ge_100k"], eval_share_entry_hour_ge_10k=ev["share_entry_hour_ge_10k"]))
         m = np.isin(c["cl"], hv["eval"])
         if long_only:
             m &= (-np.sign(c["s"]) > 0) if side == "fade" else (np.sign(c["s"]) > 0)
@@ -473,7 +479,7 @@ def main():
     variant("hedge with xyz:SP500", candidates(k, "hyperliquid", "T1", "Oplus", "neutral", hedge="J"))
     variant("entry delayed one hour (signal at T1, entry at T1 + 1h)", candidates(k, "hyperliquid", "T1p1", "Oplus", "neutral", sig_time="T1"))
     variant("core subset", cands[("T1", "neutral", "Oplus")], lambda c: np.isin(c["coin"], [f"xyz:{t}" for t in CORE]))
-    variant("entry-hour volume of at least 100,000 USD", cands[("T1", "neutral", "Oplus")], lambda c: c["ntl"] >= 1e5)
+    variant("entry-hour volume of at least 100,000 USD (100 times a 1,000 USD trade)", cands[("T1", "neutral", "Oplus")], lambda c: c["ntl"] >= 1e5)
 
     # ---- premium, extended sample
     prem, med_rate = premium_by_regime(off)

@@ -47,7 +47,9 @@ def rule():
     print("\n== Test 3 / 4: selection on the earlier half, one evaluation on the later half (bps per trade, net of costs) ==")
     s = rd("test3_selected.csv")
     print(s.select("family", "entry", "signal", "exit", "X", "side", "fallback", "sel_trades", "sel_net_bps", "sel_lo", "sel_hi", "eval_trades", "eval_clusters_with_trades", "eval_clusters",
-                   "eval_gross_bps", "eval_funding_bps", "eval_cost_bps", "eval_net_bps", "eval_lo", "eval_hi", "eval_p_net_le_0", "eval_p_bh", "eval_hit", "eval_entry_hour_usd_median", "eval_entry_hour_usd_p10"))
+                   "eval_gross_bps", "eval_funding_bps", "eval_cost_bps", "eval_net_bps", "eval_lo", "eval_hi", "eval_p_net_le_0", "eval_p_bh", "eval_p_bh10", "eval_hit",
+                   "eval_wk_net_bps", "eval_wk_lo", "eval_wk_hi", "eval_wk_t", "eval_wk_p_le_0", "eval_entry_hour_usd_median", "eval_entry_hour_usd_p10", "eval_entry_hour_usd_min",
+                   "eval_share_entry_hour_ge_100k", "eval_share_entry_hour_ge_10k"))
     g = rd("test3_grid.csv")
     print("\n-- full grid, FADE side (FOLLOW gross = -FADE gross; FOLLOW net = -FADE gross - costs + funding of the opposite sign) --")
     print(g.filter((pl.col("side") == "fade")).select("family", "entry", "signal", "exit", "X", "half", "trades", "clusters_with_trades", "clusters", "gross_bps", "gross_lo", "gross_hi",
@@ -68,12 +70,14 @@ def costs():
     print(rd("test3_costs.csv"))
     print("\n== Fees and measured half-spreads ==")
     sp = rd("spreads.csv")
-    print(sp.group_by("venue").agg(contracts=pl.len(), thin_book=pl.col("thin_book").sum(), quoted_half_median=pl.col("quoted_half_bps").median(), cost1k_median=pl.col("cost_1000_bps").median(),
+    print(sp.group_by("venue").agg(contracts=pl.len(), thin_book_1k=pl.col("thin_book").sum(), thin_book_10k=pl.col("thin_book_10k").sum(), quoted_half_median=pl.col("quoted_half_bps").median(),
+                                   cost1k_median=pl.col("cost_1000_bps").median(), cost1k_p90=pl.col("cost_1000_bps").quantile(0.9), cost1k_max=pl.col("cost_1000_bps").max(),
                                    cost10k_median=pl.col("cost_10000_bps").median(), cost10k_p90=pl.col("cost_10000_bps").quantile(0.9), cost50k_median=pl.col("cost_50000_bps").median(),
-                                   half_spread_used_median=pl.col("half_spread_bps").median(), taker_median=pl.col("taker_bps").median(), first=pl.col("first_snapshot_utc").min(), last=pl.col("last_snapshot_utc").max()))
+                                   half_spread_used_median=pl.col("half_spread_bps").median(), half_spread_10k_median=pl.col("half_spread_10k_bps").median(),
+                                   taker_median=pl.col("taker_bps").median(), first=pl.col("first_snapshot_utc").min(), last=pl.col("last_snapshot_utc").max()))
     core = ["xyz:XYZ100", "xyz:SP500"] + [f"xyz:{t}" for t in ("NVDA", "TSLA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "MU", "SMH")]
     print(sp.filter(pl.col("contract").is_in(core) | pl.col("contract").is_in(["NVDABUSDT", "TSLABUSDT", "SPYBUSDT", "QQQBUSDT", "MUBUSDT"])).select(
-        "venue", "contract", "snapshots", "quoted_half_bps", "cost_1000_bps", "cost_10000_bps", "cost_50000_bps", "bid_depth_usd", "ask_depth_usd", "half_spread_bps", "taker_bps", "maker_bps"))
+        "venue", "contract", "snapshots", "quoted_half_bps", "cost_1000_bps", "cost_10000_bps", "cost_50000_bps", "bid_depth_usd", "ask_depth_usd", "half_spread_bps", "half_spread_10k_bps", "taker_bps", "maker_bps"))
     print(rd("hl_fees.csv").group_by("growth_mode", "delisted").agg(n=pl.len(), taker_bps=pl.col("taker_bps").first(), maker_bps=pl.col("maker_bps").first()).sort("growth_mode", "delisted"))
 
 

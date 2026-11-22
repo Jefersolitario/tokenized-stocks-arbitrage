@@ -3,7 +3,8 @@
     python spreads.py
 
 Writes results/spreads.csv: per contract, the quoted half-spread and the cost against the mid of a market order of
-1,000 / 10,000 / 50,000 USD (average of buy and sell), median over the snapshots; visible depth; and the taker and
+1,000 / 10,000 / 50,000 USD (average of buy and sell), median over the snapshots; visible depth; the half-spread the
+tests use (1,000 USD order, floor 1 bp) with the 10,000 USD figure as a reference; and the taker and
 maker fee implied by the venue metadata (Hyperliquid HIP-3: tier-0 base 4.5 / 1.5 bps x 2 for deployer fee scale 1.0,
 x 0.1 when growth mode is enabled; Binance spot: 10 bps assumed, not verified).
 """
@@ -73,14 +74,17 @@ def main():
     agg = agg.with_columns(
         taker_bps=pl.when(pl.col("venue") == "binance").then(10.0).otherwise(pl.col("contract").map_elements(lambda c: fee.get(c, (9.0,))[0], return_dtype=pl.Float64)),
         maker_bps=pl.when(pl.col("venue") == "binance").then(10.0).otherwise(pl.col("contract").map_elements(lambda c: fee.get(c, (9.0, 3.0))[1], return_dtype=pl.Float64)))
-    # pre-registered half-spread: cost of a 10,000 USD market order against the mid, floor 1 bp; 5 bps if no usable snapshot
-    agg = agg.with_columns(half_spread_bps=pl.when(pl.col("cost_10000_bps").is_finite()).then(pl.max_horizontal(pl.col("cost_10000_bps"), pl.lit(1.0))).otherwise(5.0),
-                           thin_book=~pl.col("cost_10000_bps").is_finite()).sort("venue", "contract")
+    # pre-registered half-spread (addendum 3): cost of a 1,000 USD market order against the mid, floor 1 bp; 5 bps if no usable snapshot.
+    # The same for a 10,000 USD order is kept as a reference line.
+    hs = lambda col: pl.when(pl.col(col).is_finite()).then(pl.max_horizontal(pl.col(col), pl.lit(1.0))).otherwise(5.0)
+    agg = agg.with_columns(half_spread_bps=hs("cost_1000_bps"), half_spread_10k_bps=hs("cost_10000_bps"),
+                           thin_book=~pl.col("cost_1000_bps").is_finite(), thin_book_10k=~pl.col("cost_10000_bps").is_finite()).sort("venue", "contract")
     agg.write_csv(RES / "spreads.csv")
     feetab = pl.DataFrame([dict(contract=k, taker_bps=v[0], maker_bps=v[1], growth_mode=v[2], delisted=v[3], max_leverage=v[4]) for k, v in fee.items()])
     feetab.write_csv(RES / "hl_fees.csv")
     with pl.Config(tbl_rows=30, tbl_width_chars=200, tbl_cols=20):
-        print(agg.group_by("venue").agg(contracts=pl.len(), thin=pl.col("thin_book").sum(), quoted_half_median=pl.col("quoted_half_bps").median(),
+        print(agg.group_by("venue").agg(contracts=pl.len(), thin_1k=pl.col("thin_book").sum(), thin_10k=pl.col("thin_book_10k").sum(), quoted_half_median=pl.col("quoted_half_bps").median(),
+                                        cost1k_median=pl.col("cost_1000_bps").median(), cost1k_p90=pl.col("cost_1000_bps").quantile(0.9),
                                         cost10k_median=pl.col("cost_10000_bps").median(), cost10k_p90=pl.col("cost_10000_bps").quantile(0.9),
                                         half_spread_used_median=pl.col("half_spread_bps").median(), taker_median=pl.col("taker_bps").median()))
         print(feetab.group_by("growth_mode", "delisted").agg(n=pl.len(), taker=pl.col("taker_bps").first()))

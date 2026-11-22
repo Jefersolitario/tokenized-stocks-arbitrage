@@ -198,3 +198,15 @@ span that moment (entry T0, exit O+) but do not isolate it. No outcome had been 
 - Descriptive only (no test): for weekends with |v(T1)| above 1% and above 2%, the median of gap / v(T1)
   ("share of the venue's move that the cash open confirmed") and the shares of observations with a ratio below 0,
   between 0 and 1, and above 1.
+
+## Addendum 3 - trade size 1,000 USD (owner, received 22 Nov 2026 about 12:00 UTC, before the full data arrived)
+
+The owner trades about 1,000 USD per trade. Changed before any outcome was computed:
+
+- Primary half-spread per side: cost against the mid of a 1,000 USD market order in this weekend's order-book
+  snapshots (median over snapshots, average of buy and sell), floor 1 bp, 5 bps if no usable snapshot. The 10,000 USD
+  order replaces it only in a reference line ("ref_10k" cost case), not in the primary result.
+- Capacity is judged at 1,000 USD: for the trades of each cell, the notional traded on the venue in the entry hour
+  (median, 10th percentile, minimum) and the share of trades with at least 100,000 USD (100 times the trade) and at
+  least 10,000 USD (10 times) in that hour. "Comfortable" = at least 100 times.
+- Everything else is unchanged.
