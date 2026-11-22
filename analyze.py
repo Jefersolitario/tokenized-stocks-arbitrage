@@ -80,7 +80,7 @@ def per_contract(df, xcol, min_obs=10):
         if g.height >= min_obs:
             a, b, r2 = st.ols(g[xcol].to_numpy(), g["gap"].to_numpy())
             rows.append(dict(coin=coin, n=g.height, slope=b, r2=r2))
-    return pl.DataFrame(rows) if rows else pl.DataFrame(schema={"coin": pl.String, "n": pl.Int64, "slope": pl.Float64, "r2": pl.Float64})
+    return pl.DataFrame(rows).sort("coin") if rows else pl.DataFrame(schema={"coin": pl.String, "n": pl.Int64, "slope": pl.Float64, "r2": pl.Float64})
 
 
 # ------------------------------------------------------------------ test 3
