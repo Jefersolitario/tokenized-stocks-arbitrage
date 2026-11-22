@@ -1,6 +1,6 @@
 """Prints every key number of REPORT.md from the result files.   python report_numbers.py [section]
 
-Sections: key (the numbers quoted in the write-up), sample, h1, slopes, basis, rule, placebo, costs, variants, extended, premium, audit, posthoc, weekend, all (default).
+Sections: key (the numbers quoted in the write-up), sample, h1, slopes, basis, rule, placebo, costs, variants, extended, premium, audit, posthoc, late, weekend, all (default).
 Nothing is computed here except formatting: the numbers come from results/*.csv written by analyze.py, audit.py and
 spreads.py.
 """
@@ -130,6 +130,25 @@ def posthoc():
     print(b.group_by("venue", "entry", "signal", "exit", "X").agg(weekends_with_trades=pl.len(), weekends_positive=(pl.col("mean_net_bps") > 0).sum(), median_weekend_bps=pl.col("mean_net_bps").median(),
                                                                  worst_weekend_bps=pl.col("mean_net_bps").min(), best_weekend_bps=pl.col("mean_net_bps").max(), trades=pl.col("trades").sum()).sort("venue", "entry", "signal", "exit", "X"))
     print(b.filter((pl.col("venue") == "hyperliquid") & (pl.col("entry") == "Rm") & (pl.col("signal") == "neutral") & (pl.col("X") == 0.01)))
+    late()
+
+
+def late():
+    """The two checks added last (both POST-HOC): entry at the first trade after the signal time, and the fee-setting history."""
+    if (RES / "posthoc_next_trade.csv").exists():
+        print("\n== POST-HOC: entry at the first trade AFTER the signal time (Hyperliquid, Sunday evening; bps per trade, net) ==")
+        n = rd("posthoc_next_trade.csv")
+        print(n.select("signal", "X", "variant", "half", "trades", "weekends_with_trades", "weekends", "gross_bps", "cost_bps", "net_bps", "net_lo", "net_hi", "p_net_le_0", "wk_t", "wk_p_le_0",
+                       "entry_hour_usd_median"))
+        print(rd("posthoc_next_trade_slopes.csv"))
+    if (RES / "posthoc_fee_history.csv").exists():
+        print("\n== POST-HOC: fee setting at the time of each trade (metadata field lastFeeScaleChangeTime) ==")
+        c = rd("posthoc_fee_history_contracts.csv")
+        print(f"contracts {c.height}; last change inside the 1h sample: {int(c['change_inside_1h_sample'].sum())}; fewest days from a contract's last change to its first sampled weekend: "
+              f"{c['days_from_change_to_first_sampled_weekend'].min()}; changes more than 2 days after the first 2h candle: "
+              f"{c.filter(pl.col('days_from_first_candle_to_change') > 2).select('contract', 'first_2h_candle', 'last_fee_scale_change', 'taker_bps_now').rows()}")
+        h = rd("posthoc_fee_history.csv")
+        print(f"rule cells checked: {h.height}; trades entered before their contract's last fee-scale change, summed over all cells: {int(h['trades_before_last_change'].sum())}")
 
 
 def weekend():
@@ -232,6 +251,16 @@ def key():
     print(SP.group_by("venue").agg(contracts=pl.len(), cost1k_median=pl.col("cost_1000_bps").median(), cost1k_p75=pl.col("cost_1000_bps").quantile(0.75), cost1k_p90=pl.col("cost_1000_bps").quantile(0.9),
                                    cost10k_median=pl.col("cost_10000_bps").median(), cost10k_p90=pl.col("cost_10000_bps").quantile(0.9), thin_10k=pl.col("thin_book_10k").sum(),
                                    first=pl.col("first_snapshot_utc").min(), last=pl.col("last_snapshot_utc").max(), snapshots=pl.col("snapshots").max()))
+    if (RES / "posthoc_next_trade.csv").exists():
+        n = rd("posthoc_next_trade.csv")
+        print(n.filter((pl.col("signal") == "neutral") & pl.col("X").is_in([0.01, 0.03])).select("X", "variant", "half", "trades", "weekends_with_trades", "gross_bps", "cost_bps", "net_bps", "net_lo", "net_hi",
+                                                                                                 "wk_t", "entry_hour_usd_median"))
+        print(rd("posthoc_next_trade_slopes.csv"))
+    if (RES / "posthoc_fee_history.csv").exists():
+        c, h = rd("posthoc_fee_history_contracts.csv"), rd("posthoc_fee_history.csv")
+        print(f"fee history: contracts {c.height}; last fee-scale change inside the 1h sample {int(c['change_inside_1h_sample'].sum())}; fewest days from last change to first sampled weekend "
+              f"{c['days_from_change_to_first_sampled_weekend'].min()}; trades entered before their contract's last change (all {h.height} cells) {int(h['trades_before_last_change'].sum())}"
+              f"   <- posthoc_fee_history*.csv")
 
 
 def sample():
@@ -241,7 +270,9 @@ def sample():
                        ("test2_regressions.csv", "basis regressions"), ("test3_grid.csv", "rule cells x sample halves (pre-registered grid)"), ("test3_selected.csv", "configurations selected and evaluated"),
                        ("test3_costs.csv", "cost cases of the selected cells"), ("test3_variants.csv", "variants of the primary configuration x halves"), ("test3_extended.csv", "extended-sample rule cells"),
                        ("test3_placebo.csv", "placebo rows, pre-registered families"), ("posthoc_execution.csv", "POST-HOC execution variants x halves"), ("posthoc_path.csv", "POST-HOC path slopes"),
-                       ("posthoc_presample.csv", "POST-HOC pre-sample replication rows"), ("posthoc_placebo_all_cells.csv", "POST-HOC best-of-all-clocks placebo rows")):
+                       ("posthoc_presample.csv", "POST-HOC pre-sample replication rows"), ("posthoc_placebo_all_cells.csv", "POST-HOC best-of-all-clocks placebo rows"),
+                       ("posthoc_next_trade.csv", "POST-HOC next-trade entry variants x halves"), ("posthoc_next_trade_slopes.csv", "POST-HOC next-trade slopes"),
+                       ("posthoc_fee_history.csv", "POST-HOC fee-history cells x halves")):
         if (RES / name).exists():
             d = rd(name)
             extra = ""
@@ -259,7 +290,7 @@ def sample():
 if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "all"
     funcs = dict(sample=sample, h1=h1, slopes=slopes, basis=basis, rule=rule, placebo=placebo, costs=costs, variants=variants, extended=extended, premium=premium, audit=audit,
-                 posthoc=posthoc, weekend=weekend, key=key)
+                 posthoc=posthoc, weekend=weekend, key=key, late=late)
     for name, f in funcs.items():
         if what in ("all", name):
             f()
