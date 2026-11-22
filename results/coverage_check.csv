@@ -1,0 +1,7 @@
+statistic,clusters,simulations,coverage_of_nominal_95
+slope,14,400,0.8975
+slope,29,400,0.93
+slope,115,400,0.95
+mean PnL per trade,14,600,0.875
+mean PnL per trade,29,600,0.9333333333333333
+mean PnL per trade,58,600,0.9383333333333334
