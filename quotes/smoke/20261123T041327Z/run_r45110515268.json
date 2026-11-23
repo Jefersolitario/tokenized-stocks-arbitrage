@@ -1,0 +1,171 @@
+{
+ "version": "1.1",
+ "run": "r45110515268",
+ "mode": "smoke",
+ "started_utc": "2026-11-23T04:13:27+00:00",
+ "planned_end_utc": "2026-11-23T04:15:57+00:00",
+ "new_york_date": "2026-11-22",
+ "coins": [
+  "xyz:XYZ100",
+  "xyz:SP500",
+  "xyz:TSLA",
+  "xyz:NVDA",
+  "xyz:HOOD",
+  "xyz:INTC",
+  "xyz:PLTR",
+  "xyz:COIN",
+  "xyz:META",
+  "xyz:AAPL",
+  "xyz:MSFT",
+  "xyz:ORCL",
+  "xyz:GOOGL",
+  "xyz:AMZN",
+  "xyz:AMD",
+  "xyz:MU",
+  "xyz:SNDK",
+  "xyz:MSTR",
+  "xyz:CRCL",
+  "xyz:NFLX",
+  "xyz:COST",
+  "xyz:LLY",
+  "xyz:TSM",
+  "xyz:RIVN",
+  "xyz:BABA",
+  "xyz:USAR",
+  "xyz:CRWV",
+  "xyz:URNM",
+  "xyz:GME",
+  "xyz:EWY",
+  "xyz:EWJ",
+  "xyz:HIMS",
+  "xyz:DKNG",
+  "xyz:LITE",
+  "xyz:XLE",
+  "xyz:BX",
+  "xyz:MRVL",
+  "xyz:RKLB",
+  "xyz:DRAM",
+  "xyz:CBRS",
+  "xyz:EWZ",
+  "xyz:ZM",
+  "xyz:EBAY",
+  "xyz:ARM",
+  "xyz:EWT",
+  "xyz:SPCX",
+  "xyz:ASML",
+  "xyz:BB",
+  "xyz:QNT",
+  "xyz:DELL",
+  "xyz:IBM",
+  "xyz:AVGO",
+  "xyz:NOW",
+  "xyz:NBIS",
+  "xyz:WDC",
+  "xyz:NOK",
+  "xyz:SMH",
+  "xyz:BE",
+  "xyz:QCOM",
+  "xyz:AMAT",
+  "xyz:SHAZ",
+  "xyz:SKHY",
+  "xyz:KSTR",
+  "xyz:GEV",
+  "xyz:KORU",
+  "xyz:LYTE",
+  "xyz:NCLD",
+  "xyz:SOXL",
+  "xyz:MAGS",
+  "xyz:IREN",
+  "xyz:NET",
+  "xyz:CRWD",
+  "xyz:RDDT",
+  "xyz:AAOI",
+  "xyz:MRNA",
+  "xyz:XBI",
+  "xyz:BMNR",
+  "xyz:SNXX",
+  "xyz:CVX",
+  "xyz:TLT",
+  "xyz:LRCX",
+  "xyz:UMC",
+  "xyz:TWST",
+  "xyz:GLW",
+  "xyz:TTWO",
+  "xyz:MUU",
+  "xyz:ICE",
+  "xyz:PANW"
+ ],
+ "universe": {
+  "listed_on_dex": 148,
+  "recorded": 88,
+  "not_listed_or_delisted": []
+ },
+ "sizes_usd": [
+  1000,
+  3000,
+  10000,
+  30000
+ ],
+ "levels": 20,
+ "key_windows_new_york": [
+  [
+   [
+    17,
+    55
+   ],
+   [
+    18,
+    10
+   ]
+  ],
+  [
+   [
+    18,
+    55
+   ],
+   [
+    19,
+    10
+   ]
+  ],
+  [
+   [
+    19,
+    55
+   ],
+   [
+    20,
+    15
+   ]
+  ],
+  [
+   [
+    21,
+    55
+   ],
+   [
+    22,
+    10
+   ]
+  ]
+ ],
+ "seconds_between_books": {
+  "key_windows": 20.0,
+  "otherwise": 60.0
+ },
+ "seconds_between_mids": 5.0,
+ "ended_utc": "2026-11-23T04:16:07+00:00",
+ "candles_1m": 54,
+ "candles_1h": 333,
+ "stats": {
+  "requests": 744,
+  "errors": 0,
+  "http_429": 0,
+  "refused": 0,
+  "book_rows": 704,
+  "mid_rows": 30,
+  "ctx_rows": 264,
+  "cycles": 8,
+  "notes": []
+ }
+}
