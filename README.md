@@ -34,6 +34,8 @@ The backtest could not answer what an order really costs at 19:00 and 22:00 New 
   only if a stock fill costs 15 bps or less on average; after 12, a real-money pilot is considered only above +25 bps
   a trade with a per-weekend t above 2.
 - **`paper_eval.py <date>`** works out a recorded weekend under that rule and writes `results/paper/`.
+- **`publish_dashboard.py`** publishes the backtest and the paper weekends for the portfolio dashboard, in its results
+  contract, under `dashboard/` (strategy `sunday_fade_1k`, role `monitor`). Published weekends never change.
 
 First weekend (22 Nov 2026): +58 bps a trade after costs on 30 trades, median +29, with one trade supplying 40% of
 the total. One weekend is one observation.
@@ -62,6 +64,7 @@ Actions list each Sunday, all but one lasting a few seconds.
 | `report_numbers.py` | Prints the numbers quoted in the report |
 | `test_stats.py`, `synth_test.py` | Checks of the statistics on synthetic data |
 | `PAPER_RULE.md`, `record_quotes.py`, `paper_eval.py`, `quotes/` | The paper test |
+| `publish_dashboard.py`, `dashboard/` | The series the portfolio dashboard reads |
 | `HISTORY.md` | Where the commit history comes from, with old and new hashes |
 
 ## Reproduce the study

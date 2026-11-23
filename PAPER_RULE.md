@@ -99,3 +99,15 @@ The study, the recorder and the recordings moved from the branch `claude/researc
 `Jefersolitario/All-In-tracker` to this repository, at the owner's request. Nothing in the rule or the pass marks
 changes. Recordings now go to `quotes/` on `main`, and the schedule runs from this repository (HISTORY.md maps the
 old commit hashes to the ones here).
+
+## Addendum 3 (23 Nov 2026): published weekends are final
+
+The fade is now published to the portfolio dashboard (`publish_dashboard.py`, `dashboard/`), whose contract is
+append-only: a published day never changes. So item 2 of Addendum 1 is withdrawn. A weekend is final as first worked
+out, with the contracts that had an official Friday close at that time. The first weekend stays at 30 trades on 62
+contracts and +174.67 USD at 1,000 USD a trade. Contracts whose close arrives later are reported for information only
+and change nothing published.
+
+Put to the owner on the same day, to be settled by an addendum before the second recording: taking the stock's
+reference price and the hedge ratio from the venue's own prices, so that each weekend can be worked out and published
+on Monday without an outside price file.

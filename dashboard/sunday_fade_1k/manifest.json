@@ -1,0 +1,14 @@
+{
+  "id": "sunday_fade_1k",
+  "name": "Tokenized stocks: Sunday-evening fade",
+  "market": "Hyperliquid stock contracts (xyz)",
+  "currency": "USD",
+  "days_per_year": 52,
+  "description": "Every Sunday at 19:00 New York: for each tokenized-stock contract whose move since Friday's close differs by 1% or more from beta times the Nasdaq-100 contract's move, trade 1,000 USD against the difference (sell the stock contract if it is above, buy if below) with the opposite position in the index contract, and close both at 22:00. One row per weekend, dated by the UTC day of the close. Backtest rows are the study's 29 weekends at trade prints with assumed costs (in-sample). Paper rows use recorded order books, the venue's fees and funding. Research only: no money is traded.",
+  "ticket_usd": 1000.0,
+  "role": "monitor",
+  "source_repo": "tokenized-stocks-arbitrage",
+  "backtest_start": "2026-05-04",
+  "paper_start": "2026-11-23",
+  "code_version": "b952938642"
+}

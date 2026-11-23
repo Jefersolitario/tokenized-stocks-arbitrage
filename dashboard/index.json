@@ -1,0 +1,9 @@
+{
+  "contract_version": 1,
+  "source": "tokenized-stocks-arbitrage",
+  "strategies": [
+    "sunday_fade_1k"
+  ],
+  "updated_utc": "2026-11-23T04:45:01Z",
+  "data_through": "2026-11-23"
+}
