@@ -92,3 +92,10 @@ Base fee tier with no discount and no front-end fee; taker execution on all four
    the run that wrote them.
 5. **How a recording is started.** GitHub started the scheduled job four and a half hours late on 22 Nov, and that
    recording was started by hand at 17:41. The schedule on main now has a start time every half hour.
+
+## Addendum 2 (23 Nov 2026): moved to its own repository
+
+The study, the recorder and the recordings moved from the branch `claude/research-weekend-basis` of
+`Jefersolitario/All-In-tracker` to this repository, at the owner's request. Nothing in the rule or the pass marks
+changes. Recordings now go to `quotes/` on `main`, and the schedule runs from this repository (HISTORY.md maps the
+old commit hashes to the ones here).
