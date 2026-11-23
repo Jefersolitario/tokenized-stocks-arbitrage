@@ -153,15 +153,18 @@
   "otherwise": 60.0
  },
  "seconds_between_mids": 5.0,
+ "ended_utc": "2026-11-23T03:34:57+00:00",
+ "candles_1m": 26661,
+ "candles_1h": 9754,
  "stats": {
-  "requests": 39205,
+  "requests": 40804,
   "errors": 0,
   "http_429": 0,
   "refused": 0,
-  "book_rows": 35640,
-  "mid_rows": 3289,
-  "ctx_rows": 24200,
-  "cycles": 405,
+  "book_rows": 36872,
+  "mid_rows": 3466,
+  "ctx_rows": 25432,
+  "cycles": 419,
   "notes": []
  }
 }
