@@ -154,14 +154,14 @@
  },
  "seconds_between_mids": 5.0,
  "stats": {
-  "requests": 23706,
+  "requests": 27273,
   "errors": 0,
   "http_429": 0,
   "refused": 0,
-  "book_rows": 21736,
-  "mid_rows": 1817,
-  "ctx_rows": 13376,
-  "cycles": 247,
+  "book_rows": 24904,
+  "mid_rows": 2185,
+  "ctx_rows": 16104,
+  "cycles": 283,
   "notes": []
  }
 }
