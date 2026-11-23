@@ -71,3 +71,24 @@ half the time; an edge that small, at about 65 USD a weekend, is not worth runni
 
 Base fee tier with no discount and no front-end fee; taker execution on all four fills; 1,000 USD for the stock leg
 (about 3,100 USD gross with the hedge on average); no margin or leverage limit modelled.
+
+## Addendum 1 (23 Nov 2026, after the first recording)
+
+1. **An early look, at the owner's request.** On 23 Nov the first weekend was worked out with `paper_eval.py`: the
+   primary cell made +58.2 bps a trade on 30 trades (median +28.6; +36 without the best trade), and its stock fills
+   cost 7.2 bps on average. This is one weekend and was looked at outside the schedule above. It changes no rule and no
+   pass mark; the checks after 3 and after 12 weekends stand, and this weekend is the first of them.
+2. **Friday closes that arrive late.** On 23 Nov the price source had no Friday close yet for 24 of the 86 contracts,
+   so the rule skipped them. A weekend is worked out again once its official closes are complete, and that later
+   figure is the one that counts. Until then those contracts are shown apart, with the venue's own price at Friday's
+   cash close as a stand-in (`reference = venue`), which is not part of the rule. This was written after the stand-in
+   figure had been seen (+114 bps on 14 trades); it follows from the rule's use of official closes and is not a choice
+   between variants.
+3. **Funding** is taken from the recorded funding rate just before each hourly payment while the position is open.
+   The venue's payment history is not downloaded.
+4. **Recorder changes from the second weekend on; the rule is unchanged.** It keeps 20 book levels a side instead of
+   8 (on the first weekend 10 of 30 trades of the 10,000 USD cell could not be filled from 8 levels). It may start
+   from 16:45 and waits for 17:00. It stands aside when a recording is already running. Its files carry the number of
+   the run that wrote them.
+5. **How a recording is started.** GitHub started the scheduled job four and a half hours late on 22 Nov, and that
+   recording was started by hand at 17:41. The schedule on main now has a start time every half hour.
