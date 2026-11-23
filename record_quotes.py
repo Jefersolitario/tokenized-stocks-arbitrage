@@ -15,7 +15,7 @@ Usage:
   python record_quotes.py --selftest   offline checks of the arithmetic, no network
   --git-push                           commit and push the finished files every 30 minutes and at the end
 
-Writes research/weekend-basis/quotes/<New York date>/ . RUN is "r" and the number of the GitHub run (a time stamp
+Writes quotes/<New York date>/ on the branch main. RUN is "r" and the number of the GitHub run (a time stamp
 when run by hand), so two runs can never write to the same file:
   books_RUN_NNN.csv.gz  one row per contract and snapshot: best bid and ask, cost of market orders of 1,000 to 30,000 USD
                       against the mid, depth, and the first levels of the book. Every 20 s around 18:00, 19:00, 20:05
@@ -41,10 +41,10 @@ import urllib.error
 import urllib.request
 from zoneinfo import ZoneInfo
 
-VERSION = "1.1"
+VERSION = "1.2"
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE / "quotes"
-BRANCH = "claude/research-weekend-basis"
+BRANCH = "main"
 HL = "https://api.hyperliquid.xyz/info"
 UA = {"User-Agent": "weekend-quotes-recorder/1.0 (python-urllib; public market data only; research)",
       "Accept": "application/json", "Content-Type": "application/json"}

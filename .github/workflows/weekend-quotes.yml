@@ -1,0 +1,85 @@
+name: weekend-quotes
+
+# Research only. On Sunday evenings, New York time, this records public order books of Hyperliquid's tokenized-stock
+# contracts for the paper test described in PAPER_RULE.md, and commits the files to quotes/ on main.
+# No key, no account, no orders.
+#
+# Why so many start times: GitHub starts scheduled jobs late, by hours on some evenings (four and a half on
+# 22 Nov 2026). So there is one every half hour through the New York afternoon and evening. A run that finds it is
+# not yet 16:45 or already past 22:30 on a Sunday in New York stops within seconds; so does one that finds a
+# recording already running. The first run inside the window records, from 17:00 until 22:30 New York.
+#
+# By hand: "Run workflow" in the Actions tab, or change the number in quotes/START and push. A change to
+# record_quotes.py or to this file runs a 150-second test instead.
+on:
+  schedule:
+    - cron: "5,35 15-23 * * 0"   # Sunday 15:05 to 23:35 UTC
+    - cron: "5,35 0-2 * * 1"     # Monday 00:05 to 02:35 UTC, which is still Sunday evening in New York
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Record from now until 22:30 New York even if it is not Sunday evening"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - "record_quotes.py"
+      - "quotes/START"
+      - ".github/workflows/weekend-quotes.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 356
+    steps:
+      - name: What kind of run is this?
+        id: mode
+        env:
+          EVENT: ${{ github.event_name }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          day=$(TZ=America/New_York date +%u)
+          hm=$(TZ=America/New_York date +%H%M)
+          if [ "$EVENT" = "push" ]; then
+            mode=push
+          elif [ "$FORCE" = "true" ]; then
+            mode=force
+          elif [ "$day" = "7" ] && [ "$((10#$hm))" -ge 1645 ] && [ "$((10#$hm))" -lt 2230 ]; then
+            mode=full
+          else
+            mode=none
+            echo "New York: weekday $day (7 is Sunday), time $hm. Nothing to record."
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.mode.outputs.mode != 'none'
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        if: steps.mode.outputs.mode != 'none'
+        with:
+          python-version: "3.12"
+      - name: Record
+        if: steps.mode.outputs.mode != 'none'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ steps.mode.outputs.mode }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          case "$MODE" in
+            full)  python record_quotes.py --git-push ;;
+            force) python record_quotes.py --git-push --force ;;
+            push)
+              if git diff --name-only HEAD~1 HEAD | grep -qx "quotes/START"; then
+                python record_quotes.py --git-push
+              else
+                python record_quotes.py --selftest
+                python record_quotes.py --smoke 150 --git-push
+              fi ;;
+          esac
