@@ -7,21 +7,24 @@ Requests stay well below the venue's published limit (1,200 weight a minute). A 
 nothing is retried through another route.
 
 Usage:
-  python record_quotes.py              full run: only on a Sunday between 17:00 and 22:30 New York time, until 22:30
+  python record_quotes.py              full run: only on a Sunday between 16:45 and 22:30 New York time. It records
+                                       from 17:00 (or from now, if later) until 22:30, and stands aside when another
+                                       run of the recorder is already going.
   python record_quotes.py --force      record from now until 22:30 New York today whatever the weekday
   python record_quotes.py --smoke 150  short test run of 150 seconds, any time
   python record_quotes.py --selftest   offline checks of the arithmetic, no network
   --git-push                           commit and push the finished files every 30 minutes and at the end
 
-Writes research/weekend-basis/quotes/<New York date>/ :
-  books_NNN.csv.gz    one row per contract and snapshot: best bid and ask, cost of market orders of 1,000 to 30,000 USD
+Writes research/weekend-basis/quotes/<New York date>/ . RUN is "r" and the number of the GitHub run (a time stamp
+when run by hand), so two runs can never write to the same file:
+  books_RUN_NNN.csv.gz  one row per contract and snapshot: best bid and ask, cost of market orders of 1,000 to 30,000 USD
                       against the mid, depth, and the first levels of the book. Every 20 s around 18:00, 19:00, 20:05
                       and 22:00 New York, every 60 s otherwise.
-  mids_NNN.csv.gz     mid price of every contract every 5 s (one row per time, one column per contract)
-  ctx_NNN.csv.gz      mark price, oracle (reference) price, funding, open interest and impact prices every 60 s
-  candles_1m_NNN.csv.gz  1-minute trade candles of the recording window (written at the end)
-  candles_1h_NNN.csv.gz  1-hour trade candles of the previous 110 hours (for the signal's reference prices)
-  run_NNN.json        what was recorded, by which version of this file, and the error counts
+  mids_RUN_NNN.csv.gz   mid price of every contract every 5 s (one row per time, one column per contract)
+  ctx_RUN_NNN.csv.gz    mark price, oracle (reference) price, funding, open interest and impact prices every 60 s
+  candles_1m_RUN.csv.gz 1-minute trade candles of the recording window (written at the end)
+  candles_1h_RUN.csv.gz 1-hour trade candles of the previous 110 hours (for the signal's reference prices)
+  run_RUN.json          what was recorded, by which version of this file, and the error counts
 """
 import argparse
 import concurrent.futures as cf
@@ -29,6 +32,7 @@ import csv
 import datetime as dt
 import gzip
 import json
+import os
 import pathlib
 import subprocess
 import threading
@@ -37,7 +41,7 @@ import urllib.error
 import urllib.request
 from zoneinfo import ZoneInfo
 
-VERSION = "1.0"
+VERSION = "1.1"
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE / "quotes"
 BRANCH = "claude/research-weekend-basis"
@@ -57,8 +61,9 @@ SNXX CVX TLT LRCX UMC TWST GLW TTWO MUU ICE PANW""".split()
 INDEX_NAMES = ["XYZ100", "SP500"]
 
 SIZES = (1_000, 3_000, 10_000, 30_000)          # USD of a market order: stock leg and hedge leg, small and large
-LEVELS = 8                                      # book levels kept per side
-START_NY, END_NY = (17, 0), (22, 30)            # a full run may start from 17:00 and always ends at 22:30 New York
+LEVELS = 20                                     # book levels kept per side (all the venue returns)
+MAY_START_NY, RECORD_FROM_NY, END_NY = (16, 45), (17, 0), (22, 30)   # New York time on the Sunday
+RECORDERS = ("weekend-quotes", "research-weekend-quotes")            # the workflows that run this file
 KEY_WINDOWS = (((17, 55), (18, 10)), ((18, 55), (19, 10)), ((19, 55), (20, 15)), ((21, 55), (22, 10)))
 FAST, SLOW = 20.0, 60.0                         # seconds between book snapshots inside and outside the key windows
 MIDS_EVERY, CTX_EVERY, PUSH_EVERY = 5.0, 60.0, 1800.0
@@ -309,6 +314,39 @@ def git_push(message, still_open=()):
     return False
 
 
+def another_recording_running():
+    """True when another run of a recorder workflow is already recording. Outside GitHub, or if GitHub cannot be asked: False."""
+    repo, me, tok = os.environ.get("GITHUB_REPOSITORY"), os.environ.get("GITHUB_RUN_ID"), os.environ.get("GH_TOKEN")
+    if not (repo and me and tok):
+        return False
+
+    def blockers():
+        req = urllib.request.Request(f"https://api.github.com/repos/{repo}/actions/runs?status=in_progress&per_page=100",
+                                     headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json", "User-Agent": UA["User-Agent"]})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            runs = json.loads(r.read().decode()).get("workflow_runs", [])
+        out = []
+        for x in runs:
+            if x.get("name") not in RECORDERS or x["id"] == int(me):
+                continue
+            age = time.time() - dt.datetime.fromisoformat(x["run_started_at"].replace("Z", "+00:00")).timestamp()
+            if age > 180 or x["id"] < int(me):          # long under way, or started together with this run and has the lower number
+                out.append(x["id"])
+        return out
+
+    try:
+        if not blockers():
+            return False
+        time.sleep(75.0)                                # a run that only came to look at the clock has gone by now
+        found = blockers()
+        if found:
+            log("another recording is running:", found)
+        return bool(found)
+    except Exception as e:  # noqa: BLE001  (a second recording is better than none)
+        log("could not ask GitHub about other runs:", type(e).__name__)
+        return False
+
+
 def selftest():
     asks = [(100.0, 5.0), (101.0, 10.0)]                # 500 USD at 100, then 1,010 USD at 101
     bids = [(99.0, 5.0), (98.0, 10.0)]
@@ -344,15 +382,26 @@ def main():
         return 0
 
     now = dt.datetime.now(NY)
+    tag = "r" + os.environ.get("GITHUB_RUN_ID", now.astimezone(UTC).strftime("%Y%m%dT%H%M%S"))
     if args.smoke:
+        log("another recording running:", another_recording_running(), "(a test run records anyway)")
+        now = dt.datetime.now(NY)
         end = now + dt.timedelta(seconds=args.smoke)
         folder = ROOT / "smoke" / now.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
     else:
-        start = now.replace(hour=START_NY[0], minute=START_NY[1], second=0, microsecond=0)
-        end = now.replace(hour=END_NY[0], minute=END_NY[1], second=0, microsecond=0)
-        if now >= end or not (args.force or (now.weekday() == 6 and now >= start)):
-            log(f"New York time is {now:%a %H:%M}. A full run starts only on a Sunday between 17:00 and 22:30: nothing to record.")
+        at = lambda hm: now.replace(hour=hm[0], minute=hm[1], second=0, microsecond=0)  # noqa: E731
+        end = at(END_NY)
+        if now >= end or not (args.force or (now.weekday() == 6 and now >= at(MAY_START_NY))):
+            log(f"New York time is {now:%a %H:%M}. A full run starts only on a Sunday between 16:45 and 22:30: nothing to record.")
             return 0
+        if another_recording_running():
+            log("standing aside: nothing recorded by this run")
+            return 0
+        wait = (at(RECORD_FROM_NY) - dt.datetime.now(NY)).total_seconds()
+        if wait > 0 and not args.force:
+            log(f"waiting {wait / 60:.0f} minutes for 17:00 New York")
+            time.sleep(wait)
+        now = dt.datetime.now(NY)
         end = min(end, now + dt.timedelta(hours=5, minutes=36))      # stay inside the job's time limit
         folder = ROOT / now.strftime("%Y-%m-%d")
     end_ts = end.timestamp()
@@ -364,13 +413,12 @@ def main():
         return 1
     log(f"recording {len(coins)} of {len(INDEX_NAMES + US_NAMES)} wanted contracts until {end:%H:%M} New York into "
         f"{folder.relative_to(HERE)}; not listed now: {' '.join(note['not_listed_or_delisted']) or 'none'}")
-    books = PartWriter(folder, "books", BOOK_HEADER)
-    mids = PartWriter(folder, "mids", ["recv_ms"] + coins)
-    ctx = PartWriter(folder, "ctx", ["recv_ms", "coin", "mark", "oracle", "mid", "funding", "open_interest", "premium",
+    books = PartWriter(folder, f"books_{tag}", BOOK_HEADER)
+    mids = PartWriter(folder, f"mids_{tag}", ["recv_ms"] + coins)
+    ctx = PartWriter(folder, f"ctx_{tag}", ["recv_ms", "coin", "mark", "oracle", "mid", "funding", "open_interest", "premium",
                                      "impact_bid", "impact_ask", "day_usd_volume"])
-    tag = f"{books.part:03d}"                    # first part number of this run: names its run file and its candles
     run_file = folder / f"run_{tag}.json"
-    info = {"version": VERSION, "mode": "smoke" if args.smoke else "full", "started_utc": dt.datetime.now(UTC).isoformat(timespec="seconds"),
+    info = {"version": VERSION, "run": tag, "mode": "smoke" if args.smoke else "full", "started_utc": dt.datetime.now(UTC).isoformat(timespec="seconds"),
             "planned_end_utc": end.astimezone(UTC).isoformat(timespec="seconds"), "new_york_date": f"{now:%Y-%m-%d}",
             "coins": coins, "universe": note, "sizes_usd": SIZES, "levels": LEVELS, "key_windows_new_york": KEY_WINDOWS,
             "seconds_between_books": {"key_windows": FAST, "otherwise": SLOW}, "seconds_between_mids": MIDS_EVERY}
